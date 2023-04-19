@@ -1,7 +1,7 @@
 import itertools
 from time import time
 from typing import Dict, List
-from bluesky.protocols import Callback, Descriptor, Reading
+from bluesky.protocols import Callback, DataKey, Reading
 
 from bluesky.utils import ancestry, share_ancestor, separate_devices
 from bluesky.plan_stubs import trigger_and_read
@@ -36,7 +36,7 @@ class SigNew:
     def read(self) -> Dict[str, Reading]:
         return {}
 
-    def describe(self) -> Dict[str, Descriptor]:
+    def describe(self) -> Dict[str, DataKey]:
         return {}
 
     def subscribe(self, function: Callback) -> None:

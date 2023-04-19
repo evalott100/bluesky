@@ -19,7 +19,7 @@ from .protocols import (Flyable, Locatable, Movable, Pausable, Readable, Stageab
 
 import concurrent
 
-from event_model import DocumentNames, schema_validators
+from event_model import DocumentNames
 from .log import logger, msg_logger, state_logger, ComposableLogAdapter
 from super_state_machine.machines import StateMachine
 from super_state_machine.extras import PropertyMachine
@@ -2479,7 +2479,11 @@ class RunEngine:
 
     def emit_sync(self, name, doc):
         "Process blocking callbacks and schedule non-blocking callbacks."
-        schema_validators[name].validate(doc)
+        # Commenting out as schemas are validated in the event_model when
+        # composed. We're unsure of if we'll need to run this optionally
+        # for ophyd:
+        # schema_validators[name].validate(doc)
+
         self.dispatcher.process(name, doc)
 
     async def emit(self, name, doc):

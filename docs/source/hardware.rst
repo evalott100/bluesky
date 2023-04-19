@@ -101,12 +101,7 @@ To produce data in a step scan, a device must be Readable:
 A dict of stream name to Descriptors is returned from :meth:`describe`, where a
 `Descriptor` is a dictionary with the following keys:
 
-.. autoclass:: bluesky.protocols.Descriptor
-    :members:
-
-The following keys can optionally be present in a `Desciptor`:
-
-.. autoclass:: bluesky.protocols.DescriptorOptional
+.. autoclass:: bluesky.protocols.DataKeys
     :members:
 
 A dict of stream name to Reading is returned from :meth:`read`, where a
@@ -211,6 +206,13 @@ The interface of a "flyable" device is separate from the interface of a readable
 or settable device, though there is some overlap.
 
 .. autoclass:: bluesky.protocols.Flyable
+    :members:
+    :show-inheritance:
+
+For new implementations it is recommended to use Pageable rather than
+Collectable as the production of new Event documents becomes a bottleneck.
+
+.. autoclass:: bluesky.protocols.Collectable
     :members:
     :show-inheritance:
 

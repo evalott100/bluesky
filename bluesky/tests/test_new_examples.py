@@ -64,7 +64,7 @@ from bluesky.preprocessors import (
 from bluesky.plans import count, scan, rel_scan, inner_product_scan
 
 import bluesky.plans as bp
-from bluesky.protocols import Descriptor, Locatable, Location, Readable, Reading, Status
+from bluesky.protocols import DataKey, Locatable, Location, Readable, Reading, Status
 
 from bluesky.utils import all_safe_rewind
 
@@ -216,7 +216,7 @@ def test_locatable_message_multiple_objects(RE, hw):
 
 def test_rd_locatable(RE, hw):
     class Jittery(Readable, Locatable):
-        def describe(self) -> Dict[str, Descriptor]:
+        def describe(self) -> Dict[str, DataKey]:
             return dict(x=dict(source="dummy", dtype="number", shape=[]))
 
         def read(self) -> Dict[str, Reading]:

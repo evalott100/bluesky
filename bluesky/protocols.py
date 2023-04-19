@@ -6,8 +6,10 @@ except ImportError:
 from asyncio import CancelledError
 from typing import (
     Any, Awaitable, Callable, Dict, Generic, Iterator, List, Optional,
-    Sequence, Tuple, Type, TypeVar, Union
+    Tuple, Type, TypeVar, Union
 )
+from event_model.documents.event_descriptor import DataKey
+from event_model import Datum, StreamDatum, StreamResource
 
 from abc import abstractmethod
 
@@ -36,33 +38,6 @@ class Reading(ReadingOptional):
 Dtype = Literal["string", "number", "array", "boolean", "integer"]
 
 
-# https://github.com/bluesky/event-model/blob/master/event_model/schemas/event_descriptor.json
-# Just the data_key definition
-class DescriptorOptional(TypedDict, total=False):
-    """A dictionary containing optional per-scan metadata of a series of Readings"""
-    #: Where the data is stored if it is stored external to the events
-    external: str
-    #: The names for dimensions of the data. Empty list if scalar data
-    dims: Sequence[str]
-    #: Numpy dtype representation of the data. E.g. <u2
-    dtype_str: str
-    #: Number of digits after decimal place if a floating point number
-    precision: int
-    #: Engineering units of the value
-    units: str
-
-
-class Descriptor(DescriptorOptional):
-    """A dictionary containing the source and datatype of a series of Readings"""
-    #: The source of the data, e.g. an EPICS Process Variable
-    source: str
-    #: The JSON type of the data in the event. Deprecated for dtype_str
-    dtype: Dtype
-    #: The shape of the data, e.g. ``[5,5 ]`` for a 5x5 array.
-    #: An empty list ``[]`` indicates scalar data.
-    shape: Sequence[int]
-
-
 # https://github.com/bluesky/event-model/blob/master/event_model/schemas/event.json
 # But exclude descriptor, seq_num, uid added by RE
 class PartialEventOptional(TypedDict, total=False):
@@ -80,6 +55,12 @@ class PartialEvent(PartialEventOptional):
     timestamps: Dict[str, float]
     #: The timestamp that the event was taken at
     time: float
+
+
+class PartialEventPage(TypedDict):
+    data: Dict[str, List]
+    timestamps: Dict[str, List]
+    time: List[float]
 
 
 # https://github.com/bluesky/event-model/blob/master/event_model/schemas/resource.json
@@ -105,18 +86,12 @@ class PartialResource(TypedDict):
     uid: str
 
 
-# https://github.com/bluesky/event-model/blob/master/event_model/schemas/datum.json
-class Datum(TypedDict):
-    """A dictionary containing information to load event data from a Resource"""
-    #: The UID of a Resource
-    resource: str
-    #: UID that can be referenced in an Event
-    datum_id: str
-    #: Additional parameters for reading the Datum
-    datum_kwargs: Dict[str, Any]
-
-
-Asset = Union[Tuple[Literal["resource"], PartialResource], Tuple[Literal["datum"], Datum]]
+Asset = Union[
+    Tuple[Literal["resource"], PartialResource],
+    Tuple[Literal["datum"], Datum],
+    Tuple[Literal["stream_resource"], StreamResource],
+    Tuple[Literal["stream_datum"], StreamDatum]
+]
 
 T = TypeVar("T")
 SyncOrAsync = Union[T, Awaitable[T]]
@@ -181,7 +156,8 @@ class HasParent(Protocol):
 class WritesExternalAssets(Protocol):
     @abstractmethod
     def collect_asset_docs(self) -> Iterator[Asset]:
-        """Create the resource and datum documents describing data in external source.
+        """Create the resource, datum, stream_datum, and stream_resource
+        documents describing data in external source.
 
         Example yielded values:
 
@@ -216,7 +192,7 @@ class Configurable(Protocol):
         ...
 
     @abstractmethod
-    def describe_configuration(self) -> SyncOrAsync[Dict[str, Descriptor]]:
+    def describe_configuration(self) -> SyncOrAsync[Dict[str, DataKey]]:
         """Same API as ``describe``, but corresponding to the keys in
         ``read_configuration``.
 
@@ -255,7 +231,7 @@ class Readable(HasName, Protocol):
         ...
 
     @abstractmethod
-    def describe(self) -> SyncOrAsync[Dict[str, Descriptor]]:
+    def describe(self) -> SyncOrAsync[Dict[str, DataKey]]:
         """Return an OrderedDict with exactly the same keys as the ``read``
         method, here mapped to per-scan metadata about each field.
 
@@ -322,6 +298,20 @@ class Flyable(HasName, Protocol):
         """Return a ``Status`` and mark it done when acquisition has completed."""
         ...
 
+
+@runtime_checkable
+class Pageable(Protocol):
+    @abstractmethod
+    def describe_pages(self) -> Dict[str, DataKey]:
+        ...
+
+    @abstractmethod
+    def collect_pages(self) -> Iterator[PartialEventPage]:
+        ...
+
+
+@runtime_checkable
+class Collectable(HasName, Protocol):
     @abstractmethod
     def collect(self) -> Iterator[PartialEvent]:
         """Yield dictionaries that are partial Event documents.
@@ -332,7 +322,7 @@ class Flyable(HasName, Protocol):
         ...
 
     @abstractmethod
-    def describe_collect(self) -> SyncOrAsync[Dict[str, Dict[str, Descriptor]]]:
+    def describe_collect(self) -> SyncOrAsync[Dict[str, Dict[str, DataKey]]]:
         """This is like ``describe()`` on readable devices, but with an extra layer of nesting.
 
         Since a flyer can potentially return more than one event stream, this is a dict
